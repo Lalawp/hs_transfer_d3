@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<script src="http://d3js.org/d3.v3.min.js"></script>
+	<style>
+
+	</style>
+
+	<script type="text/javascript">
+		
+		function draw(geo_data){
+					"use strict";
+					var margin=75,
+						width=700 - margin,
+						height=600 - margin;
+
+					d3.select('body')
+						.append('h2')
+						.text('2013/2014 HS First Transfer Geolocation data');
+
+					var svg1=d3.select('body')
+						.append('svg')
+						.attr('width', width+margin)
+						.attr('height', height+margin)
+						.append('g')
+						.attr('class', 'map');
+
+					var projection = d3.geo.mercator()
+    					.scale(1600)
+    					.translate([3900, 2100]);
+
+					var path=d3.geo.path().projection(projection);
+
+					var map = svg1.selectAll('path')
+									.data(geo_data.features)
+									.enter()
+									.append('path')
+									.attr('d', path)
+									.style('fill', 'black')
+									.style('stroke', 'white')
+									.style('stroke-width', 0.5);
+
+					var w = 500;
+					var h = 200;
+					var barPadding=1;
+
+					
+
+					var svg2=d3.select('body')
+						.append('svg')
+						.attr('width', 1400 - (width + margin))
+						.attr('height', height + margin)
+						.append('g')
+						.attr('class', 'side_graph');
+
+			function plotting(data){
+
+				var nested=d3.nest()
+							.key(function(d){
+								return d['town'];
+							})
+							.rollup(function(leaves){
+								var students=d3.sum(leaves, function(d){
+									return d['count'];
+								});
+
+								var coords=leaves.map(function(d){
+									return projection([+d.longitude, +d.latitude]);
+								});
+
+								var latitude=d3.median(coords, function(d){
+									return d[0];
+								});
+
+								var longitude=d3.median(coords, function(d){
+									return d[1];
+								});
+
+
+
+								return {
+									'students': students,
+									'lat': latitude,
+									'long': longitude
+								}
+							})
+							.entries(data)
+
+				
+				var nested_2=d3.nest()
+						 	.key(function(d){
+								return d['town'];
+							})
+							.key(function(d){
+								return d['to_psi'];
+							})
+
+							.rollup(function(leaves){
+								var students=d3.sum(leaves, function(d){
+								return d['count'];
+							});
+							var percent=d3.sum(leaves, function(d){
+								return d['percentage'];
+							});
+							return {
+								'percent': percent,
+								'students': students
+								}
+							})
+							.entries(data)
+
+				var max_students = d3.max(nested, function(d){
+					return d.values['students'];
+				})
+
+			
+
+				var radius = d3.scale.sqrt()
+								.domain([0, max_students])
+								.range([0, 15]);
+
+				
+
+				svg1.append('g')
+					.attr('class', 'bubble')
+					.selectAll('circle')
+					.data(nested.sort(function(a, b){
+						return b.values['students'] - a.values['students'];
+					}), function(d){return d['key'];})
+					.enter()
+					.append('circle')
+					.attr('cx', function(d){return d.values['lat'];})
+					.attr('cy', function(d){return d.values['long'];})
+					.attr('r', function(d){return radius(d.values['students']);})
+					.attr('stroke', 'black')
+					.attr('stroke-width', 0.3)
+					.attr('fill', 'rgb(247, 148, 32)')
+					.attr('opacity', 0.7)
+					.on("mouseover", function(d){
+						svg1.append('rect')
+								.transition()
+								.duration(200)
+								.ease('linear')
+								.attr('width', 110)
+								.attr('height', 45)
+								.attr('fill', 'rgb(247, 148, 32)')
+								.attr('opacity', 0.9)
+								.attr('x', 60)
+								.attr('y', 200)
+								.attr('class', 'hover-box')
+								.attr('stroke-width', 2)
+								.attr('stroke', 'black')
+
+						svg1.append('text')
+					        	.transition()
+					        	.duration(400)
+					        	.ease("linear")
+					        	.attr('width', 110)
+					        	.attr('height', 50)
+						        .attr('x', 65)
+						        .attr("y", 217)
+						        .attr("class", "hover")
+						        .attr("font-family", "sans-serif")
+						        .attr("font-size", "14px")
+						        .attr('fill', 'white')
+						        .text(d['key'])
+
+						svg1.append('text')
+					        	.transition()
+					        	.duration(400)
+					        	.ease("linear")
+					        	.attr('width', 110)
+					        	.attr('height', 50)
+						        .attr('x', 65)
+						        .attr("y", 235)
+						        .attr("class", "hover")
+						        .attr("font-family", "sans-serif")
+						        .attr("font-size", "10px")
+						        .attr('fill', 'white')
+						        .text('Students:' + d.values['students'])
+
+						 
+
+
+
+					})
+					.on("mouseout", function(d){
+						d3.selectAll('.hover-box')
+							.style('visibility', 'hidden')
+						d3.selectAll('.hover')
+							.style('visibility', 'hidden');
+					})
+
+					.on('click', function(d){
+						d3.selectAll('circle')
+							.transition()
+							.duration(800)
+							.attr('fill', 'rgb(247, 148, 32)' )
+						d3.selectAll('.second-title')
+							.transition()
+							.duration(1000)
+							.style('visibility', 'hidden')
+						d3.select(this)
+							.transition()
+							.duration(800)
+							.attr('fill', 'red');
+
+						var clicked=d['key']
+
+
+						var filtered=nested_2.filter(function(d){
+								return clicked==d['key']
+						})
+
+						svg2.selectAll('rect')
+							.remove()
+
+						svg2.selectAll('.subtitles')
+							.remove()
+
+						
+
+						var subArray=filtered.map(function(d){return d.values;})
+						var subData=subArray[0]
+
+						svg2.append('text')
+							.attr('class', 'subtitles')
+							.attr('x', 0)
+							.attr('y', 20)
+							.text('Market Share: ' + filtered[0]['key'])
+
+						svg2.selectAll('rect')
+						   .data(subData.sort(function(a, b){return b.values['students'] - a.values['students'];}))
+						   .enter()
+						   .append('g')
+						   .append("rect")
+						   .attr("x", function(d, i){return i * 40;})
+						   .attr("y", function(d){return 150 - d.values['students'];})
+						   .attr("width", 10)
+						   .attr("height", function(d){return d.values['students'];})
+						   .attr('fill', function(d){
+						   		return (d['key']=='NWCC' ? 'orange': 'black');
+						  })
+						   .attr('opacity', 0.6)
+						   .style('visibility', 'visible')
+						   .on('mouseover', function(d, i){
+						   		d3.select(this)
+						   			.attr('opacity', 1)
+						   		svg2.append('text')
+						   			.attr('class', 'market-hover')
+						   			.text(d['key'] + ': ' + d.values['students'])
+						   			.attr('x', (i * 40) + 85)
+						   			.attr('y', 173)
+						   			.attr('fill', 'white')
+						   			.transition()
+						   			.delay(400)
+						   			.duration(300)
+						   			.attr('fill', 'black')
+						   		svg2.append("line")
+						   			.attr('class', 'market-hover')
+						   			.style('stroke-dasharray', ('3, 3'))
+						   			.attr('x1', i * 40 + 5)
+						   			.attr('y1', 155)
+						   			.attr('x2', i * 40)
+						   			.attr('y2', 155)
+						   			.transition()
+						   			.duration(200)
+						   			.attr('x2', (i * 40) + 40)
+						   			.attr('y2', 170)
+						   			.attr('stroke-width', 1)
+						   			.attr('stroke', 'black')
+
+						   		svg2.append('line')
+						   			.attr('class', 'market-hover')
+						   			.style('stroke-dasharray', ('3, 3'))
+						   			.attr('x1', (i * 40) + 42)
+						   			.attr('y1', 170)
+						   			.attr('x2', (i * 40) + 40)
+						   			.attr('y2', 170)
+						   			.transition()
+						   			.delay(200)
+						   			.duration(200)
+						   			.attr('x2', (i * 40) + 80)
+						   			.attr('y2', 170)
+						   			.attr('stroke-width', 1)
+						   			.attr('stroke', 'black')
+
+						   })
+						   .on('mouseout', function(d){
+						   		d3.select(this)
+						   			.attr('opacity', 0.6)
+						   		d3.selectAll('.market-hover')
+						   			.transition()
+						   			.duration(1200)
+						   			.style('visibility', 'hidden')
+						   			.remove()
+						   })
+
+						 debugger;
+
+						 
+					})
+
+
+                
+					
+				
+
+				
+
+
+			}
+
+		
+
+			d3.csv('new_grads.csv', plotting)
+
+
+
+
+		}
+	</script>
+</head>
+<body>
+	<script type="text/javascript">
+		d3.json("bcGeo.json", draw); 
+	</script>
+
+
+
+
+
+</body>
+</html>
